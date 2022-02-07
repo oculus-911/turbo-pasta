@@ -5,7 +5,7 @@ import pandas as pd
 
 API_KEY ="96fmvyckhforx64"
 # todo this should be in a config file somewhere and get loaded at runtime
-#
+
 
 def get_yesterday_dt():
   """Return a clean datetime object with yesterdays day"""
@@ -106,10 +106,7 @@ class SmartestEnergyDataWrapper:
   def write_list_to_csv_file(self, listOfLists, targetDirectory, targetFilename):
     """Takes a list of lists and outputs to a  to a target csv file"""
 
-    # print(targetDirectory)
-    # print(targetFilename)
     targetFilename = targetDirectory + targetFilename
-    # print(targetFilename)
     with open(targetFilename, "w",newline="") as f:
           writer = csv.writer(f)
           writer.writerows(listOfLists)
@@ -120,7 +117,7 @@ class SmartestEnergyDataWrapper:
 
 class BrmsApiWrapper:
   """ Instantiate a target BRMS with some sensible defaults"""
-  
+
   def __init__(self,
   serviceName,
   settlementDate,
@@ -128,8 +125,6 @@ class BrmsApiWrapper:
   ):
     self.serviceName = serviceName
     self.apiKey = API_KEY  # todo this should be loaded from a config somewhere
-    # self.baseUrl = baseUrl
-    # self.period = period
     self.settlementDate = settlementDate    # settlementDate = "2022-02-04"  # We must match this format for the api
     self.dataExportType = dataExportType  # this is what the exchange calls service type
     self.serviceNameList = ["ImbalancePrices","AggregatedImbalanceVolumes"]
