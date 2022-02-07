@@ -52,10 +52,6 @@ def csv_data_to_merged_df(serviceNameList,settlementDate,targetDirectory = "data
   else:
     raise ValueError("Missing csv data to construct dataframe")
 
-
-
-
-
 class PowerDfAnalytics:
   """Instantiate an analytics object that accepts a dataframe and contains analytics methods """
 
@@ -110,10 +106,6 @@ class SmartestEnergyDataWrapper:
     with open(targetFilename, "w",newline="") as f:
           writer = csv.writer(f)
           writer.writerows(listOfLists)
-
-
-  def read_csv_file(self, targetDirectory):
-    pass
 
 class BrmsApiWrapper:
   """ Instantiate a target BRMS with some sensible defaults"""
@@ -198,3 +190,5 @@ def main():
 if __name__ == "__main__":
   # entrypoint
   main()
+
+  # todo - potential upgrades, calculate peak/off peak average, spreads and historical percentile etc
