@@ -120,6 +120,7 @@ class SmartestEnergyDataWrapper:
 
 class BrmsApiWrapper:
   """ Instantiate a target BRMS with some sensible defaults"""
+  
   def __init__(self,
   serviceName,
   settlementDate,
