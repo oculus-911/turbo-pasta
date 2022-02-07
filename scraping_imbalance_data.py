@@ -1,15 +1,56 @@
 import requests
 import datetime
-import json
 import csv
-
+import pandas as pd
 
 API_KEY ="96fmvyckhforx64"
 # todo this should be in a config file somewhere and get loaded at runtime
 #
 
+class PowerDfAnalytics:
+  """Instantiate an analytics object that accepts a dataframe and contains analytics methods """
+
+  def __init__(self,
+  powerDf):
+    self.df =powerDf
+
+  def calculate_daily_abs_max_imbalance_volume_hour(self):
+    """Returns the HOUR owith the abs maximum imbalance volume as string
+
+    Each trading period is 30 mins, and the trading day can have 23-25 hours
+    calculate the absolute imbalance for each hourly session and return the max
+    """
+
+    self.df['ImbalanceQuantityMAW_abs'] = self.df['ImbalanceQuantityMAW'].abs()
+    imbalanceQuantityMAW_list  = self.df['ImbalanceQuantityMAW_abs'].tolist()
+    hourlyPeriodAbsMaxImbalance = 0
+    maxHourlyPeriod = 0
+    for i in range(0,len(self.df), 2): # increment the hour not the period
+      hourlyImbalance =imbalanceQuantityMAW_list[i] + imbalanceQuantityMAW_list[i+1]
+      if  hourlyImbalance > hourlyPeriodAbsMaxImbalance:
+        hourlyPeriodAbsMaxImbalance =hourlyImbalance
+        maxHourlyPeriod = int(i/2)
+
+    return maxHourlyPeriod
+
+
+  def calculate_sum_daily_imbalance_cost(self):
+    """Returns the sum daily imbalance cost by 1) calculating the period cost as Price * Volume and 2) summing, assummption that we are looking for the absolute cost """
+
+    self.df['PeriodImbalanceCost'] = self.df['ImbalanceQuantityMAW'].abs() * self.df['ImbalancePriceAmount']
+    self.sumDailyImbalanceCost =self.df['PeriodImbalanceCost'].sum()
+    return self.sumDailyImbalanceCost
+
+  def calculate_daily_imbalance_unit_rate(self):
+    """Returns the daily imbalance rate as  Sum (Abs cost)/Sum (Abs Volume)  """
+
+    self.df['ImbalanceQuantityMAW_abs'] = self.df['ImbalanceQuantityMAW'].abs()
+    self.df['PeriodImbalanceCost'] = self.df['ImbalanceQuantityMAW_abs'] * self.df['ImbalancePriceAmount']
+    self.dailyImbalanceUnitRate =  self.df['PeriodImbalanceCost'].sum() / self.df['ImbalanceQuantityMAW_abs'].sum()
+    return self.dailyImbalanceUnitRate
 
 class SmartestEnergyDataWrapper:
+
   def __init__(self):
     pass
 
@@ -97,6 +138,11 @@ class BrmsApiWrapper:
 apiKey = API_KEY
 
 settlementDate_dt = datetime.datetime.utcnow() - datetime.timedelta(1)
+# clean this date format
+settlementDate_dt = settlementDate_dt.replace(hour=0)
+settlementDate_dt = settlementDate_dt.replace(minute=0)
+settlementDate_dt = settlementDate_dt.replace(second=0)
+settlementDate_dt = settlementDate_dt.replace(microsecond=0)
 settlementDate  = datetime.datetime.strftime(settlementDate_dt, '%Y-%m-%d')
 targetDirectory = "data/"
 
@@ -124,22 +170,36 @@ print("Finished Fetching Raw Data")
 
 # read data from csv into a dataframe
 # todo - if  the data already exists then dont bother fetching again
-import pandas as pd
-
 serviceName = "ImbalancePrices"  # or "AggregatedImbalanceVolumes"
 imbalancePricesFileName = targetDirectory + "/" + serviceName + "_" + settlementDate + ".csv"
-imbalancePricesDf = pd.read_csv(imbalancePricesFileName)
-print(imbalancePricesDf.columns)
-imbalancePricesDf = pd.read_csv(imbalancePricesFileName, usecols=["SettlementDate", "SettlementPeriod", "ImbalancePriceAmount"])
-imbalancePricesDf.set_index("SettlementPeriod")
+
+imbalancePricesDf = pd.read_csv(imbalancePricesFileName, usecols=["SettlementDate", "SettlementPeriod", "ImbalancePriceAmount","PriceCategory"])
+# we need to condense this down as they duplciate the price data
+condensedImbalancePricesDf = imbalancePricesDf[imbalancePricesDf.PriceCategory== "Excess balance"]
+condensedImbalancePricesDf.set_index("SettlementPeriod")
+
+
 
 serviceName = "AggregatedImbalanceVolumes"
 aggregatedImbalanceVolumesFileName = targetDirectory + "/" + serviceName + "_" + settlementDate + ".csv"
-
-
 aggregatedImbalanceVolumesDf = pd.read_csv(aggregatedImbalanceVolumesFileName, usecols=["SettlementDate", "SettlementPeriod", "ImbalanceQuantityMAW"])
 aggregatedImbalanceVolumesDf.set_index('SettlementPeriod')
-mergedPricesVolumesDf =  imbalancePricesDf.merge(aggregatedImbalanceVolumesDf, left_index=True,right_index=True)
-print("finish")
+# mergedPricesVolumesDf =  imbalancePricesDf.merge(aggregatedImbalanceVolumesDf, left_index=True,right_index=True)
+# mergedPricesVolumesDf =  condensedImbalancePricesDf.merge(aggregatedImbalanceVolumesDf, left_index=True,right_index=True)
+mergedPricesVolumesDf =  pd.merge(condensedImbalancePricesDf, aggregatedImbalanceVolumesDf , left_on="SettlementPeriod", right_on="SettlementPeriod")
+print("finished merging dataframe")
 
 # ok now do the various analytics required
+powerDfAnalytics = PowerDfAnalytics(mergedPricesVolumesDf)
+maxHourlyPeriod = powerDfAnalytics.calculate_daily_abs_max_imbalance_volume_hour()
+dailyImbalanceCost = powerDfAnalytics.calculate_sum_daily_imbalance_cost()
+dailyImbalanceUnitRate = powerDfAnalytics.calculate_daily_imbalance_unit_rate()
+
+
+settlementDateMaxHour_dt =  settlementDate_dt.replace(hour=maxHourlyPeriod)
+
+print(f"REPORTING: Total Daily Imbalance Cost is £{round(dailyImbalanceCost,2)} ")
+print(f"REPORTING: Total Daily Imbalance Unit Rate   £{round(dailyImbalanceUnitRate,2)}/MWH")
+print(f"REPORTING: Highest Absolute Volume imbalances were the hour of {settlementDateMaxHour_dt}")
+print("Finished")
+#todo refactor
